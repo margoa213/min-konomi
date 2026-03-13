@@ -1,491 +1,5 @@
 import { db } from "@/lib/db";
 
-export type MonthlyReportSummary = {
-  year: number;
-  month: number;
-  totalIncome: number;
-  totalExpenses: number;
-  netSavings: number;
-  savingsRate: number;
-  byCategory: {
-    category: string;
-    total: number;
-  }[];
-};
-
-export type MonthlyComparison = {
-  previousYear: number;
-  previousMonth: number;
-  incomeChangeAmount: number | null;
-  incomeChangePercent: number | null;
-  expenseChangeAmount: number | null;
-  expenseChangePercent: number | null;
-  savingsChangeAmount: number | null;
-  savingsChangePercent: number | null;
-};
-
-export type TrendPoint = {
-  year: number;
-  month: number;
-  label: string;
-  totalIncome: number;
-  totalExpenses: number;
-  netSavings: number;
-  savingsRate: number;
-};
-
-export type CategoryTrendItem = {
-  category: string;
-  currentTotal: number;
-  previousTotal: number;
-  changeAmount: number;
-  changePercent: number;
-  threeMonthAverage: number;
-};
-
-function getMonthDateRange(year: number, month: number) {
-  const start = new Date(year, month - 1, 1);
-  const end = new Date(year, month, 0, 23, 59, 59, 999);
-  return { start, end };
-}
-
-function calculatePercentChange(
-  current: number,
-  previous: number
-): number | null {
-  if (previous === 0) return null;
-  return ((current - previous) / previous) * 100;
-}
-
-export async function generateMonthlyReport(
-  userId: string,
-  year: number,
-  month: number
-): Promise<MonthlyReportSummary> {
-  const { start, end } = getMonthDateRange(year, month);
-
-  const transactions = await db.transaction.findMany({
-    where: {
-      userId,
-      bookingDate: {
-        gte: start,
-        lte: end,
-      },
-    },
-    orderBy: {
-      bookingDate: "asc",
-    },
-  });
-
-  let totalIncome = 0;
-  let totalExpenses = 0;
-
-  const categoryMap = new Map<string, number>();
-
-  for (const tx of transactions) {
-    const amount = Math.abs(tx.amount);
-
-    if (tx.direction === "IN") {
-      totalIncome += amount;
-    } else {
-      totalExpenses += amount;
-      const category = tx.category ?? "Ukjent";
-      categoryMap.set(category, (categoryMap.get(category) ?? 0) + amount);
-    }
-  }
-
-  const netSavings = totalIncome - totalExpenses;
-  const savingsRate = totalIncome > 0 ? (netSavings / totalIncome) * 100 : 0;
-
-  const byCategory = Array.from(categoryMap.entries())
-    .map(([category, total]) => ({ category, total }))
-    .sort((a, b) => b.total - a.total);
-
-  return {
-    year,
-    month,
-    totalIncome,
-    totalExpenses,
-    netSavings,
-    savingsRate,
-    byCategory,
-  };
-}
-
-export async function generateMonthlyComparison(
-  userId: string,
-  year: number,
-  month: number
-): Promise<MonthlyComparison> {
-  const previousMonth = month === 1 ? 12 : month - 1;
-  const previousYear = month === 1 ? year - 1 : year;
-
-  const current = await generateMonthlyReport(userId, year, month);
-  const previous = await generateMonthlyReport(userId, previousYear, previousMonth);
-
-  return {
-    previousYear,
-    previousMonth,
-    incomeChangeAmount: current.totalIncome - previous.totalIncome,
-    incomeChangePercent: calculatePercentChange(
-      current.totalIncome,
-      previous.totalIncome
-    ),
-    expenseChangeAmount: current.totalExpenses - previous.totalExpenses,
-    expenseChangePercent: calculatePercentChange(
-      current.totalExpenses,
-      previous.totalExpenses
-    ),
-    savingsChangeAmount: current.netSavings - previous.netSavings,
-    savingsChangePercent: calculatePercentChange(
-      current.netSavings,
-      previous.netSavings
-    ),
-  };
-}
-
-export async function generateSixMonthTrend(
-  userId: string,
-  year: number,
-  month: number
-): Promise<TrendPoint[]> {
-  const points: TrendPoint[] = [];
-
-  for (let i = 5; i >= 0; i--) {
-    const date = new Date(year, month - 1 - i, 1);
-    const report = await generateMonthlyReport(
-      userId,
-      date.getFullYear(),
-      date.getMonth() + 1
-    );
-
-    points.push({
-      year: report.year,
-      month: report.month,
-      label: `${report.month}/${report.year}`,
-      totalIncome: report.totalIncome,
-      totalExpenses: report.totalExpenses,
-      netSavings: report.netSavings,
-      savingsRate: report.savingsRate,
-    });
-  }
-
-  return points;
-}
-
-export async function generateCategoryTrend(
-  userId: string,
-  year: number,
-  month: number
-): Promise<CategoryTrendItem[]> {
-  const current = await generateMonthlyReport(userId, year, month);
-
-  const previousMonth = month === 1 ? 12 : month - 1;
-  const previousYear = month === 1 ? year - 1 : year;
-  const previous = await generateMonthlyReport(userId, previousYear, previousMonth);
-
-  const allCategories = new Set([
-    ...current.byCategory.map((item) => item.category),
-    ...previous.byCategory.map((item) => item.category),
-  ]);
-
-  const items: CategoryTrendItem[] = [];
-
-  for (const category of allCategories) {
-    const currentTotal =
-      current.byCategory.find((item) => item.category === category)?.total ?? 0;
-    const previousTotal =
-      previous.byCategory.find((item) => item.category === category)?.total ?? 0;
-
-    const changeAmount = currentTotal - previousTotal;
-    const changePercent =
-      previousTotal > 0 ? ((changeAmount / previousTotal) * 100) : 0;
-
-    items.push({
-      category,
-      currentTotal,
-      previousTotal,
-      changeAmount,
-      changePercent,
-      threeMonthAverage: currentTotal,
-    });
-  }
-
-  return items.sort((a, b) => b.currentTotal - a.currentTotal);
-}
-
-export function generateInsights(
-  report: MonthlyReportSummary,
-  comparison: MonthlyComparison
-): string[] {
-  const insights: string[] = [];
-
-  if (report.savingsRate > 20) {
-    insights.push("Du hadde en sterk sparegrad denne måneden.");
-  } else if (report.savingsRate < 0) {
-    insights.push("Du brukte mer enn du tjente denne måneden.");
-  }
-
-  if (
-    comparison.expenseChangePercent !== null &&
-    comparison.expenseChangePercent > 10
-  ) {
-    insights.push("Utgiftene dine økte merkbart sammenlignet med forrige måned.");
-  }
-
-  if (report.byCategory.length > 0) {
-    insights.push(
-      `Største utgiftskategori var ${report.byCategory[0].category}.`
-    );
-  }
-
-  return insights;
-}
-import { db } from "@/lib/db";
-
-export type MonthlyReportSummary = {
-  year: number;
-  month: number;
-  totalIncome: number;
-  totalExpenses: number;
-  netSavings: number;
-  savingsRate: number;
-  byCategory: {
-    category: string;
-    total: number;
-  }[];
-};
-
-export type MonthlyComparison = {
-  previousYear: number;
-  previousMonth: number;
-  incomeChangeAmount: number | null;
-  incomeChangePercent: number | null;
-  expenseChangeAmount: number | null;
-  expenseChangePercent: number | null;
-  savingsChangeAmount: number | null;
-  savingsChangePercent: number | null;
-};
-
-export type TrendPoint = {
-  year: number;
-  month: number;
-  label: string;
-  totalIncome: number;
-  totalExpenses: number;
-  netSavings: number;
-  savingsRate: number;
-};
-
-export type CategoryTrendItem = {
-  category: string;
-  currentTotal: number;
-  previousTotal: number;
-  changeAmount: number;
-  changePercent: number;
-  threeMonthAverage: number;
-};
-
-function getMonthDateRange(year: number, month: number) {
-  const start = new Date(year, month - 1, 1);
-  const end = new Date(year, month, 0, 23, 59, 59, 999);
-  return { start, end };
-}
-
-function calculatePercentChange(
-  current: number,
-  previous: number
-): number | null {
-  if (previous === 0) return null;
-  return ((current - previous) / previous) * 100;
-}
-
-export async function generateMonthlyReport(
-  userId: string,
-  year: number,
-  month: number
-): Promise<MonthlyReportSummary> {
-  const { start, end } = getMonthDateRange(year, month);
-
-  const transactions = await db.transaction.findMany({
-    where: {
-      userId,
-      bookingDate: {
-        gte: start,
-        lte: end,
-      },
-    },
-    orderBy: {
-      bookingDate: "asc",
-    },
-  });
-
-  let totalIncome = 0;
-  let totalExpenses = 0;
-
-  const categoryMap = new Map<string, number>();
-
-  for (const tx of transactions) {
-    const amount = Math.abs(tx.amount);
-
-    if (tx.direction === "IN") {
-      totalIncome += amount;
-    } else {
-      totalExpenses += amount;
-      const category = tx.category ?? "Ukjent";
-      categoryMap.set(category, (categoryMap.get(category) ?? 0) + amount);
-    }
-  }
-
-  const netSavings = totalIncome - totalExpenses;
-  const savingsRate = totalIncome > 0 ? (netSavings / totalIncome) * 100 : 0;
-
-  const byCategory = Array.from(categoryMap.entries())
-    .map(([category, total]) => ({ category, total }))
-    .sort((a, b) => b.total - a.total);
-
-  return {
-    year,
-    month,
-    totalIncome,
-    totalExpenses,
-    netSavings,
-    savingsRate,
-    byCategory,
-  };
-}
-
-export async function generateMonthlyComparison(
-  userId: string,
-  year: number,
-  month: number
-): Promise<MonthlyComparison> {
-  const previousMonth = month === 1 ? 12 : month - 1;
-  const previousYear = month === 1 ? year - 1 : year;
-
-  const current = await generateMonthlyReport(userId, year, month);
-  const previous = await generateMonthlyReport(userId, previousYear, previousMonth);
-
-  return {
-    previousYear,
-    previousMonth,
-    incomeChangeAmount: current.totalIncome - previous.totalIncome,
-    incomeChangePercent: calculatePercentChange(
-      current.totalIncome,
-      previous.totalIncome
-    ),
-    expenseChangeAmount: current.totalExpenses - previous.totalExpenses,
-    expenseChangePercent: calculatePercentChange(
-      current.totalExpenses,
-      previous.totalExpenses
-    ),
-    savingsChangeAmount: current.netSavings - previous.netSavings,
-    savingsChangePercent: calculatePercentChange(
-      current.netSavings,
-      previous.netSavings
-    ),
-  };
-}
-
-export async function generateSixMonthTrend(
-  userId: string,
-  year: number,
-  month: number
-): Promise<TrendPoint[]> {
-  const points: TrendPoint[] = [];
-
-  for (let i = 5; i >= 0; i--) {
-    const date = new Date(year, month - 1 - i, 1);
-    const report = await generateMonthlyReport(
-      userId,
-      date.getFullYear(),
-      date.getMonth() + 1
-    );
-
-    points.push({
-      year: report.year,
-      month: report.month,
-      label: `${report.month}/${report.year}`,
-      totalIncome: report.totalIncome,
-      totalExpenses: report.totalExpenses,
-      netSavings: report.netSavings,
-      savingsRate: report.savingsRate,
-    });
-  }
-
-  return points;
-}
-
-export async function generateCategoryTrend(
-  userId: string,
-  year: number,
-  month: number
-): Promise<CategoryTrendItem[]> {
-  const current = await generateMonthlyReport(userId, year, month);
-
-  const previousMonth = month === 1 ? 12 : month - 1;
-  const previousYear = month === 1 ? year - 1 : year;
-  const previous = await generateMonthlyReport(userId, previousYear, previousMonth);
-
-  const allCategories = new Set([
-    ...current.byCategory.map((item) => item.category),
-    ...previous.byCategory.map((item) => item.category),
-  ]);
-
-  const items: CategoryTrendItem[] = [];
-
-  for (const category of allCategories) {
-    const currentTotal =
-      current.byCategory.find((item) => item.category === category)?.total ?? 0;
-    const previousTotal =
-      previous.byCategory.find((item) => item.category === category)?.total ?? 0;
-
-    const changeAmount = currentTotal - previousTotal;
-    const changePercent =
-      previousTotal > 0 ? ((changeAmount / previousTotal) * 100) : 0;
-
-    items.push({
-      category,
-      currentTotal,
-      previousTotal,
-      changeAmount,
-      changePercent,
-      threeMonthAverage: currentTotal,
-    });
-  }
-
-  return items.sort((a, b) => b.currentTotal - a.currentTotal);
-}
-
-export function generateInsights(
-  report: MonthlyReportSummary,
-  comparison: MonthlyComparison
-): string[] {
-  const insights: string[] = [];
-
-  if (report.savingsRate > 20) {
-    insights.push("Du hadde en sterk sparegrad denne måneden.");
-  } else if (report.savingsRate < 0) {
-    insights.push("Du brukte mer enn du tjente denne måneden.");
-  }
-
-  if (
-    comparison.expenseChangePercent !== null &&
-    comparison.expenseChangePercent > 10
-  ) {
-    insights.push("Utgiftene dine økte merkbart sammenlignet med forrige måned.");
-  }
-
-  if (report.byCategory.length > 0) {
-    insights.push(
-      `Største utgiftskategori var ${report.byCategory[0].category}.`
-    );
-  }
-
-  return insights;
-}
-import { db } from "@/lib/db";
-
 type CategoryItem = {
   category: string;
   total: number;
@@ -501,6 +15,8 @@ export type MonthlyReport = {
   byCategory: CategoryItem[];
 };
 
+export type MonthlyReportSummary = MonthlyReport;
+
 export type MonthlyComparison = {
   previousYear: number;
   previousMonth: number;
@@ -512,7 +28,7 @@ export type MonthlyComparison = {
   savingsChangePercent: number | null;
 };
 
-export type SixMonthTrendPoint = {
+export type TrendPoint = {
   year: number;
   month: number;
   label: string;
@@ -521,6 +37,8 @@ export type SixMonthTrendPoint = {
   netSavings: number;
   savingsRate: number;
 };
+
+export type SixMonthTrendPoint = TrendPoint;
 
 export type CategoryTrendItem = {
   category: string;
@@ -554,6 +72,17 @@ function roundPercent(value: number) {
   return Math.round(value * 10) / 10;
 }
 
+export function getMonthDateRange(year: number, month: number) {
+  if (!Number.isInteger(year) || !Number.isInteger(month)) {
+    throw new Error(`Ugyldig år eller måned: year=${year}, month=${month}`);
+  }
+
+  const start = new Date(year, month - 1, 1);
+  const end = new Date(year, month, 0, 23, 59, 59, 999);
+
+  return { start, end };
+}
+
 function getMonthLabel(year: number, month: number) {
   return `${monthNames[month - 1] ?? `Måned ${month}`} ${year}`;
 }
@@ -568,6 +97,7 @@ function getPreviousMonth(year: number, month: number) {
 
 function getMonthOffset(year: number, month: number, offset: number) {
   const date = new Date(year, month - 1 + offset, 1);
+
   return {
     year: date.getFullYear(),
     month: date.getMonth() + 1,
@@ -604,10 +134,14 @@ function calculatePercentChange(current: number, previous: number) {
   return roundPercent(((current - previous) / previous) * 100);
 }
 
-async function getTransactionsForMonth(userId: string, year: number, month: number) {
+async function getTransactionsForMonth(
+  userId: string,
+  year: number,
+  month: number
+) {
   const { start, end } = getMonthDateRange(year, month);
 
-  const transactions = await db.transaction.findMany({
+  return db.transaction.findMany({
     where: {
       userId,
       bookingDate: {
@@ -619,8 +153,6 @@ async function getTransactionsForMonth(userId: string, year: number, month: numb
       bookingDate: "asc",
     },
   });
-
-  return transactions;
 }
 
 function buildMonthlyTotals(
@@ -699,7 +231,9 @@ export async function generateMonthlyComparison(
   );
 
   const previousHasAnyData =
-    previous.totalIncome > 0 || previous.totalExpenses > 0 || previous.netSavings !== 0;
+    previous.totalIncome > 0 ||
+    previous.totalExpenses > 0 ||
+    previous.netSavings !== 0;
 
   if (!previousHasAnyData) {
     return {
@@ -861,8 +395,12 @@ export async function generateCategoryTrend(
   const items: CategoryTrendItem[] = [];
 
   for (const category of categories) {
-    const currentItem = current.byCategory.find((item) => item.category === category);
-    const previousItem = previous.byCategory.find((item) => item.category === category);
+    const currentItem = current.byCategory.find(
+      (item) => item.category === category
+    );
+    const previousItem = previous.byCategory.find(
+      (item) => item.category === category
+    );
 
     const currentTotal = currentItem?.total ?? 0;
     const previousTotal = previousItem?.total ?? 0;
