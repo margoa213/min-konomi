@@ -83,6 +83,17 @@ export function getMonthDateRange(year: number, month: number) {
   return { start, end };
 }
 
+export function getMonthDateRange(year: number, month: number) {
+  if (!Number.isInteger(year) || !Number.isInteger(month)) {
+    throw new Error(`Ugyldig år eller måned: year=${year}, month=${month}`);
+  }
+
+  const start = new Date(year, month - 1, 1);
+  const end = new Date(year, month, 0, 23, 59, 59, 999);
+
+  return { start, end };
+}
+
 function getMonthLabel(year: number, month: number) {
   return `${monthNames[month - 1] ?? `Måned ${month}`} ${year}`;
 }
