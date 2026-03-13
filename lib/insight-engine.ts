@@ -1,3 +1,234 @@
+import type { CategoryTrendItem, TrendPoint } from "./monthly-report";
+
+export type SmartInsight = {
+  title: string;
+  description: string;
+  severity: "low" | "medium" | "high";
+};
+
+export type FinancialFactor = {
+  title: string;
+  description: string;
+  impact: "positive" | "neutral" | "negative";
+};
+
+export type FinancialScoreResult = {
+  score: number;
+  label: string;
+  summary: string;
+  factors: FinancialFactor[];
+};
+
+export type Recommendation = {
+  title: string;
+  description: string;
+  severity: "low" | "medium" | "high";
+  impactLabel: string;
+};
+
+export type MonthlyNarrativeInput = {
+  monthLabel: string;
+  totalIncome: number;
+  totalExpenses: number;
+  netSavings: number;
+  savingsRate: number;
+  topCategory: { category: string; total: number } | null;
+  comparison: {
+    expenseChangeAmount: number | null;
+    expenseChangePercent: number | null;
+    incomeChangeAmount: number | null;
+    incomeChangePercent: number | null;
+    savingsChangeAmount: number | null;
+    savingsChangePercent: number | null;
+  };
+  financialScore: FinancialScoreResult;
+  recommendations: Recommendation[];
+};
+
+export type MonthlyNarrativeResult = {
+  title: string;
+  intro: string;
+  bullets: string[];
+  closing: string;
+  emailText: string;
+};
+
+export function generateFinancialScore(
+  trend: TrendPoint[],
+  categoryTrend: CategoryTrendItem[]
+): FinancialScoreResult {
+  let score = 50;
+  const factors: FinancialFactor[] = [];
+
+  const latest = trend[trend.length - 1];
+
+  if (latest) {
+    if (latest.savingsRate >= 20) {
+      score += 20;
+      factors.push({
+        title: "God sparegrad",
+        description: "Du sparte en solid andel av inntekten din.",
+        impact: "positive",
+      });
+    } else if (latest.savingsRate < 0) {
+      score -= 20;
+      factors.push({
+        title: "Negativ sparegrad",
+        description: "Du brukte mer enn du tjente.",
+        impact: "negative",
+      });
+    }
+  }
+
+  if (categoryTrend.some((item) => item.changePercent > 25)) {
+    score -= 10;
+    factors.push({
+      title: "Økende utgifter",
+      description: "En eller flere kategorier har økt kraftig.",
+      impact: "negative",
+    });
+  }
+
+  score = Math.max(0, Math.min(100, score));
+
+  const label =
+    score >= 80 ? "Sterk" : score >= 60 ? "Bra" : score >= 40 ? "Stabil" : "Svak";
+
+  const summary =
+    score >= 80
+      ? "Økonomien din ser sterk ut akkurat nå."
+      : score >= 60
+        ? "Økonomien din er god, men har fortsatt forbedringspotensial."
+        : score >= 40
+          ? "Økonomien din er relativt stabil, men bør følges opp."
+          : "Økonomien din trenger oppmerksomhet.";
+
+  return {
+    score,
+    label,
+    summary,
+    factors,
+  };
+}
+
+export function generateRecommendations(
+  trend: TrendPoint[],
+  categoryTrend: CategoryTrendItem[],
+  financialScore: FinancialScoreResult
+): Recommendation[] {
+  const recommendations: Recommendation[] = [];
+
+  const latest = trend[trend.length - 1];
+
+  if (latest && latest.savingsRate < 10) {
+    recommendations.push({
+      title: "Øk sparegraden",
+      description: "Prøv å redusere variable kostnader for å øke månedlig sparing.",
+      severity: "medium",
+      impactLabel: "Bedre likviditet",
+    });
+  }
+
+  const topGrowth = categoryTrend
+    .filter((item) => item.changeAmount > 0)
+    .sort((a, b) => b.changeAmount - a.changeAmount)[0];
+
+  if (topGrowth) {
+    recommendations.push({
+      title: `Se nærmere på ${topGrowth.category}`,
+      description: `Denne kategorien har økt med ${topGrowth.changeAmount.toFixed(0)} kr siden forrige måned.`,
+      severity: "medium",
+      impactLabel: "Kostnadskontroll",
+    });
+  }
+
+  if (financialScore.score < 50) {
+    recommendations.push({
+      title: "Lag en enklere månedsplan",
+      description: "Sett et tak på de største utgiftskategoriene neste måned.",
+      severity: "high",
+      impactLabel: "Bedre kontroll",
+    });
+  }
+
+  return recommendations;
+}
+
+export function generateMonthlyNarrative(
+  input: MonthlyNarrativeInput
+): MonthlyNarrativeResult {
+  const bullets: string[] = [
+    `Inntekter: ${input.totalIncome.toFixed(0)} kr`,
+    `Utgifter: ${input.totalExpenses.toFixed(0)} kr`,
+    `Netto sparing: ${input.netSavings.toFixed(0)} kr`,
+    `Sparegrad: ${input.savingsRate.toFixed(1)} %`,
+  ];
+
+  if (input.topCategory) {
+    bullets.push(
+      `Største utgiftskategori var ${input.topCategory.category} (${input.topCategory.total.toFixed(0)} kr).`
+    );
+  }
+
+  if (input.recommendations[0]) {
+    bullets.push(`Viktigste anbefaling: ${input.recommendations[0].title}.`);
+  }
+
+  const title = `Månedsrapport for ${input.monthLabel}`;
+  const intro = `Her er oppsummeringen for ${input.monthLabel}.`;
+  const closing = `Økonomiscore: ${input.financialScore.score}/100 (${input.financialScore.label}).`;
+
+  const emailText = [
+    intro,
+    ...bullets,
+    closing,
+  ].join("\n");
+
+  return {
+    title,
+    intro,
+    bullets,
+    closing,
+    emailText,
+  };
+}
+
+export function generateSmartInsights(
+  trend: TrendPoint[],
+  categoryTrend: CategoryTrendItem[],
+  financialScore: FinancialScoreResult
+): SmartInsight[] {
+  const insights: SmartInsight[] = [];
+
+  const latest = trend[trend.length - 1];
+
+  if (latest && latest.savingsRate < 0) {
+    insights.push({
+      title: "Negativ utvikling",
+      description: "Du har negativ sparegrad denne måneden.",
+      severity: "high",
+    });
+  }
+
+  const highGrowthCategory = categoryTrend.find((item) => item.changePercent > 20);
+  if (highGrowthCategory) {
+    insights.push({
+      title: `Økning i ${highGrowthCategory.category}`,
+      description: "Denne kategorien har økt betydelig siden forrige måned.",
+      severity: "medium",
+    });
+  }
+
+  if (financialScore.score >= 80) {
+    insights.push({
+      title: "Sterk økonomisk måned",
+      description: "Du har god kontroll og en sterk total score.",
+      severity: "low",
+    });
+  }
+
+  return insights;
+}
 import { CategoryTrendItem, TrendPoint } from "./monthly-report";
 
 export type SmartInsight = {
