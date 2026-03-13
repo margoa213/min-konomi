@@ -47,6 +47,8 @@ export type CategoryTrendItem = {
   changeAmount: number;
   changePercent: number | null;
   threeMonthAverage: number;
+  vsAverageAmount: number;
+  vsAveragePercent: number | null;
 };
 
 const monthNames = [
@@ -70,17 +72,6 @@ function roundAmount(value: number) {
 
 function roundPercent(value: number) {
   return Math.round(value * 10) / 10;
-}
-
-export function getMonthDateRange(year: number, month: number) {
-  if (!Number.isInteger(year) || !Number.isInteger(month)) {
-    throw new Error(`Ugyldig år eller måned: year=${year}, month=${month}`);
-  }
-
-  const start = new Date(year, month - 1, 1);
-  const end = new Date(year, month, 0, 23, 59, 59, 999);
-
-  return { start, end };
 }
 
 export function getMonthDateRange(year: number, month: number) {
@@ -317,17 +308,21 @@ export function generateInsights(
   ) {
     if (comparison.expenseChangeAmount > 0) {
       insights.push(
-        `Utgiftene økte med ${Math.abs(comparison.expenseChangeAmount).toLocaleString(
-          "no-NO"
-        )} kr (${Math.abs(comparison.expenseChangePercent)
+        `Utgiftene økte med ${Math.abs(
+          comparison.expenseChangeAmount
+        ).toLocaleString("no-NO")} kr (${Math.abs(
+          comparison.expenseChangePercent
+        )
           .toFixed(1)
           .replace(".", ",")} %) sammenlignet med forrige måned.`
       );
     } else if (comparison.expenseChangeAmount < 0) {
       insights.push(
-        `Utgiftene falt med ${Math.abs(comparison.expenseChangeAmount).toLocaleString(
-          "no-NO"
-        )} kr (${Math.abs(comparison.expenseChangePercent)
+        `Utgiftene falt med ${Math.abs(
+          comparison.expenseChangeAmount
+        ).toLocaleString("no-NO")} kr (${Math.abs(
+          comparison.expenseChangePercent
+        )
           .toFixed(1)
           .replace(".", ",")} %) fra forrige måned.`
       );
@@ -421,12 +416,19 @@ export async function generateCategoryTrend(
         ? roundPercent(((currentTotal - previousTotal) / previousTotal) * 100)
         : null;
 
-    const threeMonthAverage = await getThreeMonthAverageForCategory(
+    const threeMonthAverageRaw = await getThreeMonthAverageForCategory(
       userId,
       year,
       month,
       category
     );
+
+    const threeMonthAverage = roundAmount(threeMonthAverageRaw);
+    const vsAverageAmount = roundAmount(currentTotal - threeMonthAverage);
+    const vsAveragePercent =
+      threeMonthAverage > 0
+        ? roundPercent(((currentTotal - threeMonthAverage) / threeMonthAverage) * 100)
+        : null;
 
     items.push({
       category,
@@ -434,7 +436,9 @@ export async function generateCategoryTrend(
       previousTotal,
       changeAmount,
       changePercent,
-      threeMonthAverage: roundAmount(threeMonthAverage),
+      threeMonthAverage,
+      vsAverageAmount,
+      vsAveragePercent,
     });
   }
 
