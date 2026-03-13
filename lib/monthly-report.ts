@@ -558,27 +558,6 @@ function getMonthLabel(year: number, month: number) {
   return `${monthNames[month - 1] ?? `Måned ${month}`} ${year}`;
 }
 
-function getMonthDateRange(year: number, month: number) {
-  if (!Number.isInteger(year) || !Number.isInteger(month)) {
-    throw new Error(`Ugyldig år eller måned: year=${year}, month=${month}`);
-  }
-
-  if (month < 1 || month > 12) {
-    throw new Error(`Måned må være mellom 1 og 12. Fikk month=${month}`);
-  }
-
-  const start = new Date(year, month - 1, 1, 0, 0, 0, 0);
-  const end = new Date(year, month, 0, 23, 59, 59, 999);
-
-  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
-    throw new Error(
-      `Kunne ikke bygge gyldig datointervall: year=${year}, month=${month}`
-    );
-  }
-
-  return { start, end };
-}
-
 function getPreviousMonth(year: number, month: number) {
   if (month === 1) {
     return { year: year - 1, month: 12 };
