@@ -36,7 +36,10 @@ export default function ExpenseChart({ data }: ExpenseChartProps) {
             tick={{ fill: "#a3a3a3", fontSize: 12 }}
           />
           <Tooltip
-            formatter={(value: number) => [`${value} kr`, "Beløp"]}
+            formatter={(value) => {
+                const safeValue = typeof value === "number" ? value : 0;
+                return [`${safeValue} kr`, "Beløp"];
+            }}
             contentStyle={{
               backgroundColor: "#0a0a0a",
               border: "1px solid #333",
