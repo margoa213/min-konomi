@@ -556,24 +556,29 @@ export function generateMonthlyNarrative(
     );
   }
 
-  if (
-    comparison?.expenseChangeAmount !== null &&
-    comparison?.expenseChangePercent !== null
-  ) {
-    if (comparison.expenseChangeAmount > 0) {
-      bullets.push(
-        `Utgiftene økte med ${formatCurrency(
-          Math.abs(comparison.expenseChangeAmount)
-        )} (${formatPercent(Math.abs(comparison.expenseChangePercent))}) sammenlignet med forrige måned.`
-      );
-    } else if (comparison.expenseChangeAmount < 0) {
-      bullets.push(
-        `Utgiftene falt med ${formatCurrency(
-          Math.abs(comparison.expenseChangeAmount)
-        )} (${formatPercent(Math.abs(comparison.expenseChangePercent))}) sammenlignet med forrige måned.`
-      );
-    }
+   if (
+  comparison &&
+  comparison.expenseChangeAmount !== null &&
+  comparison.expenseChangePercent !== null
+) {
+  if (comparison.expenseChangeAmount > 0) {
+    bullets.push(
+      `Utgiftene økte med ${formatCurrency(
+        Math.abs(comparison.expenseChangeAmount)
+      )} (${formatPercent(
+        Math.abs(comparison.expenseChangePercent)
+      )}) sammenlignet med forrige måned.`
+    );
+  } else if (comparison.expenseChangeAmount < 0) {
+    bullets.push(
+      `Utgiftene falt med ${formatCurrency(
+        Math.abs(comparison.expenseChangeAmount)
+      )} (${formatPercent(
+        Math.abs(comparison.expenseChangePercent)
+      )}) sammenlignet med forrige måned.`
+    );
   }
+}
 
   const intro = `${monthLabel} ble vurdert som en ${financialScore.label.toLowerCase()} måned med en økonomiscore på ${financialScore.score}/100. ${financialScore.summary}`;
 

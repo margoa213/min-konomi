@@ -2,6 +2,13 @@ import "dotenv/config";
 import { db } from "../lib/db";
 import { categorizeTransaction } from "../lib/categorize";
 
+type DemoTransaction = {
+  id: string;
+  text: string;
+  amount: number;
+  date: string;
+};
+
 async function main() {
   console.log("Starter seed...");
 
@@ -29,8 +36,7 @@ async function main() {
     },
   });
 
-  const demoTransactions = [
-
+  const demoTransactions: DemoTransaction[] = [
     // ======================
     // JANUAR 2026
     // ======================
@@ -102,7 +108,7 @@ async function main() {
         currency: "NOK",
         description: tx.text,
         merchantName: tx.text,
-        category: categorizeTransaction(tx.text),
+        category: categorizeTransaction(tx.text, tx.amount),
         direction: tx.amount >= 0 ? "in" : "out",
       },
     });
@@ -113,7 +119,7 @@ async function main() {
 
 main()
   .catch((error) => {
-    console.error(error);
+    console.error("Seed feilet:", error);
     process.exit(1);
   })
   .finally(async () => {
