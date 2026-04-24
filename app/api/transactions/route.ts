@@ -12,6 +12,11 @@ export async function POST(req: Request) {
     }
 
     const currentUser = await getOrCreateCurrentUser();
+
+    if (!currentUser) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const body = await req.json();
 
     console.log("transactions POST body:", body);
