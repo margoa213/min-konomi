@@ -305,9 +305,14 @@ export async function buildMonthlyReportPdf(
     const cardHeight = 88;
     const cardWidth = CONTENT_WIDTH;
     const cardX = MARGIN;
-    const cardY = y - cardHeight + 12;
 
     ensureSpace(cardHeight + 16);
+
+    const cardY = y - cardHeight + 12;
+
+    const safeScore =
+      typeof score === "number" && Number.isFinite(score) ? score : 0;
+    const clampedScore = Math.max(0, Math.min(100, safeScore));
 
     page.drawRectangle({
       x: cardX,
@@ -319,7 +324,7 @@ export async function buildMonthlyReportPdf(
       color: rgb(0.98, 0.98, 0.98),
     });
 
-    page.drawText(`Økonomiscore: ${score}/100`, {
+    page.drawText(`Økonomiscore: ${clampedScore}/100`, {
       x: cardX + 18,
       y: y - 16,
       size: 20,
@@ -329,14 +334,20 @@ export async function buildMonthlyReportPdf(
 
     const barX = cardX + 18;
     const barY = y - 42;
-    const barWidth = cardWidth - 36;
+    const rawBarWidth = cardWidth - 36;
     const barHeight = 12;
-    const fillWidth = Math.max(0, Math.min(100, score)) / 100 * barWidth;
+
+    const safeBarWidth =
+      typeof rawBarWidth === "number" && Number.isFinite(rawBarWidth)
+        ? rawBarWidth
+        : 180;
+
+    const fillWidth = Math.max(0, (clampedScore / 100) * safeBarWidth);
 
     page.drawRectangle({
       x: barX,
       y: barY,
-      width: barWidth,
+      width: safeBarWidth,
       height: barHeight,
       color: rgb(0.9, 0.9, 0.9),
       borderWidth: 0,
@@ -347,7 +358,7 @@ export async function buildMonthlyReportPdf(
       y: barY,
       width: fillWidth,
       height: barHeight,
-      color: rgb(0.2, 0.6, 0.3),
+      color: rgb(0.22, 0.74, 0.44),
       borderWidth: 0,
     });
 

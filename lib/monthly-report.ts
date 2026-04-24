@@ -79,6 +79,10 @@ export function getMonthDateRange(year: number, month: number) {
     throw new Error(`Ugyldig år eller måned: year=${year}, month=${month}`);
   }
 
+  if (month < 1 || month > 12) {
+    throw new Error(`Måned må være mellom 1 og 12. Fikk month=${month}`);
+  }
+
   const start = new Date(year, month - 1, 1);
   const end = new Date(year, month, 0, 23, 59, 59, 999);
 
@@ -226,6 +230,7 @@ export async function generateMonthlyComparison(
 ): Promise<MonthlyComparison> {
   const current = await generateMonthlyReport(userId, year, month);
   const previousRef = getPreviousMonth(year, month);
+
   const previous = await generateMonthlyReport(
     userId,
     previousRef.year,
@@ -387,6 +392,7 @@ export async function generateCategoryTrend(
 ): Promise<CategoryTrendItem[]> {
   const current = await generateMonthlyReport(userId, year, month);
   const previousRef = getPreviousMonth(year, month);
+
   const previous = await generateMonthlyReport(
     userId,
     previousRef.year,
@@ -411,6 +417,7 @@ export async function generateCategoryTrend(
     const currentTotal = currentItem?.total ?? 0;
     const previousTotal = previousItem?.total ?? 0;
     const changeAmount = roundAmount(currentTotal - previousTotal);
+
     const changePercent =
       previousTotal > 0
         ? roundPercent(((currentTotal - previousTotal) / previousTotal) * 100)
@@ -425,9 +432,12 @@ export async function generateCategoryTrend(
 
     const threeMonthAverage = roundAmount(threeMonthAverageRaw);
     const vsAverageAmount = roundAmount(currentTotal - threeMonthAverage);
+
     const vsAveragePercent =
       threeMonthAverage > 0
-        ? roundPercent(((currentTotal - threeMonthAverage) / threeMonthAverage) * 100)
+        ? roundPercent(
+            ((currentTotal - threeMonthAverage) / threeMonthAverage) * 100
+          )
         : null;
 
     items.push({

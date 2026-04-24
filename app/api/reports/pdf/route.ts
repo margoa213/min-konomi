@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/lib/db";
-import { buildMonthlyReportPdf } from "@/lib/pdf-report";
+import { auth } from "@clerk/nextjs/server";
+import { NextResponse } from "next/server";
+
+import { getOrCreateCurrentUser } from "@/lib/get-or-create-user";
 import {
   generateMonthlyComparison,
   generateMonthlyReport,
@@ -11,60 +12,57 @@ import {
   generateMonthlyNarrative,
   generateRecommendations,
 } from "@/lib/insight-engine";
+import { buildMonthlyReportPdf } from "@/lib/pdf-report";
 
-const monthNames = [
-  "Januar",
-  "Februar",
-  "Mars",
-  "April",
-  "Mai",
-  "Juni",
-  "Juli",
-  "August",
-  "September",
-  "Oktober",
-  "November",
-  "Desember",
-];
-
-function safeNumber(value: string | null, fallback: number) {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : fallback;
-}
-
-export async function GET(req: NextRequest) {
+export async function GET(req: Request) {
   try {
+    const { userId } = await auth();
+
+    if (!userId) {
+      return new NextResponse("Unauthorized", { status: 401 });
+    }
+
+    const user = await getOrCreateCurrentUser();
+
+    if (!user) {
+      return new NextResponse("User not found", { status: 404 });
+    }
+
     const { searchParams } = new URL(req.url);
 
     const now = new Date();
-    const year = safeNumber(searchParams.get("year"), now.getFullYear());
-    const month = safeNumber(searchParams.get("month"), now.getMonth() + 1);
-
-    if (!year || !month || month < 1 || month > 12) {
-      return NextResponse.json(
-        { error: "Ugyldig år eller måned." },
-        { status: 400 }
-      );
-    }
-
-    const user = await db.user.findFirst();
-
-    if (!user) {
-      return NextResponse.json(
-        { error: "Fant ingen bruker i databasen." },
-        { status: 404 }
-      );
-    }
+    const year = Number(searchParams.get("year") ?? now.getFullYear());
+    const month = Number(searchParams.get("month") ?? now.getMonth() + 1);
 
     const report = await generateMonthlyReport(user.id, year, month);
     const comparison = await generateMonthlyComparison(user.id, year, month);
-    const trend = await generateSixMonthTrend(user.id, year, month);
-    const financialScore = generateFinancialScore(trend, []);
-    const recommendations = generateRecommendations(trend, [], financialScore);
+    const trendRaw = await generateSixMonthTrend(user.id, year, month);
+
+    const financialScore = generateFinancialScore(trendRaw, []);
+    const recommendations = generateRecommendations(
+      trendRaw,
+      [],
+      financialScore
+    );
+
+    const monthNames = [
+      "Januar",
+      "Februar",
+      "Mars",
+      "April",
+      "Mai",
+      "Juni",
+      "Juli",
+      "August",
+      "September",
+      "Oktober",
+      "November",
+      "Desember",
+    ];
 
     const monthLabel = `${monthNames[month - 1]} ${year}`;
 
-    const monthlyNarrative = generateMonthlyNarrative({
+    const narrative = generateMonthlyNarrative({
       monthLabel,
       totalIncome: report.totalIncome,
       totalExpenses: report.totalExpenses,
@@ -84,7 +82,7 @@ export async function GET(req: NextRequest) {
     });
 
     const pdfBytes = await buildMonthlyReportPdf({
-      userName: user.name ?? "Demo-bruker",
+      userName: user.name ?? user.email ?? "Bruker",
       year,
       month,
       report: {
@@ -96,58 +94,49 @@ export async function GET(req: NextRequest) {
           category: item.category,
           amount: item.total,
         })),
-        trend: trend.map((item) => ({
-          month: item.label,
-          expenses: item.totalExpenses,
-          netSavings: item.netSavings,
-          savingsRate: item.savingsRate,
+        trend: trendRaw.map((point) => ({
+          month: point.label,
+          expenses: point.totalExpenses,
+          netSavings: point.netSavings,
+          savingsRate: point.savingsRate,
         })),
         comparison: {
-          expenseDiff: comparison.expenseChangeAmount ?? 0,
-          expenseDiffPercent: comparison.expenseChangePercent ?? 0,
+          expenseDiff: comparison.expenseChangeAmount ?? undefined,
+          expenseDiffPercent: comparison.expenseChangePercent ?? undefined,
           incomeText:
-            comparison.incomeChangeAmount === null
-              ? "Første måned med data"
-              : comparison.incomeChangeAmount > 0
-                ? "Opp"
-                : comparison.incomeChangeAmount < 0
-                  ? "Ned"
-                  : "Uendret",
-          savingsDiff: comparison.savingsChangeAmount ?? 0,
-          savingsDiffPercent: comparison.savingsChangePercent ?? 0,
+            comparison.incomeChangeAmount == null ||
+            comparison.incomeChangePercent == null
+              ? undefined
+              : `${comparison.incomeChangeAmount >= 0 ? "Opp" : "Ned"} ${Math.abs(
+                  comparison.incomeChangeAmount
+                ).toLocaleString("nb-NO")} kr (${Math.abs(
+                  comparison.incomeChangePercent
+                )
+                  .toFixed(1)
+                  .replace(".", ",")} %)`,
+          savingsDiff: comparison.savingsChangeAmount ?? undefined,
+          savingsDiffPercent: comparison.savingsChangePercent ?? undefined,
         },
       },
       insights: {
         score: financialScore.score,
         scoreLabel: financialScore.label,
-        analysis: financialScore.summary,
-        recommendations: recommendations.map((item) => item.title),
-        summary: monthlyNarrative.emailText,
+        analysis: Array.isArray(narrative.bullets)
+          ? [narrative.intro, ...narrative.bullets, narrative.closing]
+          : narrative.intro,
+        recommendations: recommendations.map((r) => r.title),
+        summary: narrative.intro,
       },
     });
 
     return new NextResponse(Buffer.from(pdfBytes), {
-      status: 200,
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": `inline; filename="manedsrapport-${year}-${String(
-          month
-        ).padStart(2, "0")}.pdf"`,
-        "Cache-Control": "no-store",
+        "Content-Disposition": `inline; filename="rapport-${year}-${month}.pdf"`,
       },
     });
   } catch (error) {
-    console.error("PDF route error:", error);
-
-    const message =
-      error instanceof Error ? error.message : "Ukjent serverfeil";
-
-    return NextResponse.json(
-      {
-        error: "Kunne ikke generere PDF.",
-        details: message,
-      },
-      { status: 500 }
-    );
+    console.error("PDF ERROR:", error);
+    return new NextResponse("Internal Server Error", { status: 500 });
   }
 }

@@ -1,5 +1,8 @@
-import Link from "next/link";
+import { getOrCreateCurrentUser } from "../../lib/get-or-create-user";
 import { db } from "../../lib/db";
+import { auth } from "@clerk/nextjs/server";
+import { redirect } from "next/navigation";
+import Link from "next/link";
 import {
   generateFinancialScore,
   generateMonthlyNarrative,
@@ -13,6 +16,7 @@ import {
   generateMonthlyReport,
   generateSixMonthTrend,
 } from "../../lib/monthly-report";
+import { RecentTransactionsSection } from "./recent-transactions-section";
 
 type ReportsPageProps = {
   searchParams?: Promise<{
@@ -109,7 +113,7 @@ function getCategoryDeltaMeta(changeAmount: number, changePercent: number | null
   return {
     label: changeAmount > 0 ? "Opp" : "Ned",
     color: changeAmount > 0 ? "#f87171" : "#4ade80",
-    amountText: formatCurrency(Math.abs(changeAmount)),
+    amountText: formatCurrency(Math.abs(changePercent)),
     percentText: formatPercent(Math.abs(changePercent)),
   };
 }
@@ -248,35 +252,41 @@ function ComparisonCard({
 }
 
 export default async function ReportsPage({ searchParams }: ReportsPageProps) {
+  const { userId } = await auth();
+
+  if (!userId) {
+    redirect("/sign-in");
+  }
+
   const params = (await searchParams) ?? {};
 
   const now = new Date();
   const year = Number(params.year ?? now.getFullYear());
   const month = Number(params.month ?? now.getMonth() + 1);
 
-  const user = await db.user.findFirst();
+  const user = await getOrCreateCurrentUser();
 
   if (!user) {
-    return (
-      <main
-        style={{
-          minHeight: "100vh",
-          background: "#030303",
-          color: "#ffffff",
-          padding: "48px 24px",
-        }}
-      >
-        <div style={{ maxWidth: 1100, margin: "0 auto" }}>
-          <h1 style={{ fontSize: 42, fontWeight: 800, marginBottom: 12 }}>
-            Månedsrapport
-          </h1>
-          <p style={{ color: "rgba(255,255,255,0.7)" }}>
-            Fant ingen bruker i databasen.
-          </p>
-        </div>
-      </main>
-    );
+    redirect("/sign-in");
   }
+
+  const recentTransactions = await db.transaction.findMany({
+    where: {
+      userId: user.id,
+    },
+    orderBy: {
+      bookingDate: "desc",
+    },
+    take: 5,
+    select: {
+      id: true,
+      amount: true,
+      category: true,
+      description: true,
+      bookingDate: true,
+      direction: true,
+    },
+  });
 
   const report = await generateMonthlyReport(user.id, year, month);
   const comparison = await generateMonthlyComparison(user.id, year, month);
@@ -379,6 +389,22 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
           </div>
 
           <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+            <Link
+              href="/transactions/new"
+              style={{
+                background: "#16a34a",
+                border: "1px solid rgba(134,239,172,0.35)",
+                color: "#ffffff",
+                padding: "12px 18px",
+                borderRadius: 14,
+                textDecoration: "none",
+                fontSize: 15,
+                fontWeight: 600,
+              }}
+            >
+              + Ny transaksjon
+            </Link>
+
             <Link
               href={`/reports?year=${prevYear}&month=${prevMonth}`}
               style={{
@@ -1053,6 +1079,8 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
               })}
             </div>
           </SectionCard>
+
+          <RecentTransactionsSection transactions={recentTransactions} />
 
           <SectionCard title="Utgifter per kategori">
             {report.byCategory.length === 0 ? (
