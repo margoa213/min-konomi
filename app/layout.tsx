@@ -46,12 +46,11 @@ export const metadata: Metadata = {
     follow: true,
   },
   icons: {
-  icon: "/icon.svg",
-  shortcut: "/icon.svg",
-  apple: "/icon.svg",
+    icon: "/icon.svg",
+    shortcut: "/icon.svg",
+    apple: "/icon.svg",
   },
-  };
-
+};
 
 export default function RootLayout({
   children,
