@@ -12,15 +12,17 @@ export default function Home() {
         </p>
 
         <div className="flex gap-4 justify-center pt-4">
+          {/* LOGIN */}
           <Link
-            href="/sign-in"
+            href="/sign-in?redirect_url=/reports"
             className="px-6 py-3 rounded-lg bg-black text-white font-medium hover:opacity-90"
           >
             Logg inn
           </Link>
 
+          {/* DEMO */}
           <Link
-            href="/sign-in"
+            href="/sign-in?redirect_url=/reports"
             className="px-6 py-3 rounded-lg border border-slate-300 font-medium hover:bg-slate-100"
           >
             Se demo
