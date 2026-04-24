@@ -1,7 +1,6 @@
 "use client";
 
 import { SignInButton } from "@clerk/nextjs";
-import Link from "next/link";
 
 export default function Home() {
   return (
@@ -21,12 +20,11 @@ export default function Home() {
             </button>
           </SignInButton>
 
-          <Link
-            href="/reports"
-            className="px-6 py-3 rounded-lg border border-slate-300 font-medium hover:bg-slate-100"
-          >
-            Se demo
-          </Link>
+          <SignInButton mode="modal" fallbackRedirectUrl="/reports">
+            <button className="px-6 py-3 rounded-lg border border-slate-300 font-medium hover:bg-slate-100">
+              Se demo
+            </button>
+          </SignInButton>
         </div>
       </div>
     </main>
