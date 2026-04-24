@@ -20,7 +20,7 @@ export default function Home() {
           </Link>
 
           <Link
-            href="/reports"
+            href="/sign-in"
             className="px-6 py-3 rounded-lg border border-slate-300 font-medium hover:bg-slate-100"
           >
             Se demo
