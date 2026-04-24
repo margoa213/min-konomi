@@ -1,18 +1,17 @@
-import { auth } from "@clerk/nextjs/server";
-import { redirect } from "next/navigation";
+import Link from "next/link";
 
-export default async function ReportsPage() {
-  const { userId } = await auth();
-
-  // Hvis ikke logget inn → send til sign-in
-  if (!userId) {
-    redirect("/sign-in");
-  }
-
+export default function Home() {
   return (
-    <div style={{ padding: 40 }}>
-      <h1>Reports fungerer 🎉</h1>
-      <p>Du er logget inn.</p>
-    </div>
+    <main className="min-h-screen flex items-center justify-center">
+      <div className="text-center space-y-4">
+        <h1 className="text-3xl font-bold">Goa Regnskap</h1>
+
+        <Link href="/sign-in">
+          <button className="px-4 py-2 bg-black text-white rounded">
+            Logg inn
+          </button>
+        </Link>
+      </div>
+    </main>
   );
 }
