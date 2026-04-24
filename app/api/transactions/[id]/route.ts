@@ -18,6 +18,11 @@ export async function DELETE(_req: Request, context: RouteContext) {
     }
 
     const currentUser = await getOrCreateCurrentUser();
+
+    if (!currentUser) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const { id } = await context.params;
 
     if (!id) {
@@ -46,7 +51,7 @@ export async function DELETE(_req: Request, context: RouteContext) {
 
     await db.transaction.delete({
       where: {
-        id,
+        id: transaction.id,
       },
     });
 
