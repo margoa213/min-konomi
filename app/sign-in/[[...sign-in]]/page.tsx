@@ -8,7 +8,6 @@ export default function SignInPage() {
       <SignIn
         routing="path"
         path="/sign-in"
-        forceRedirectUrl="/reports"
         signUpUrl="/sign-up"
       />
     </main>

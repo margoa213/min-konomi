@@ -1,32 +1,18 @@
-import Link from "next/link";
+import { auth } from "@clerk/nextjs/server";
+import { redirect } from "next/navigation";
 
-export default function Home() {
+export default async function ReportsPage() {
+  const { userId } = await auth();
+
+  // Hvis ikke logget inn → send til sign-in
+  if (!userId) {
+    redirect("/sign-in");
+  }
+
   return (
-    <main className="min-h-screen bg-white text-slate-900 flex flex-col items-center justify-center px-6">
-      <div className="max-w-2xl w-full text-center space-y-6">
-        <h1 className="text-4xl font-bold">Goa Regnskap</h1>
-
-        <p className="text-lg text-slate-600">
-          Enkel oversikt over privatøkonomien din. Få innsikt, rapporter og
-          kontroll – uten stress.
-        </p>
-
-        <div className="flex gap-4 justify-center pt-4">
-          <Link
-            href="/sign-in"
-            className="px-6 py-3 rounded-lg bg-black text-white font-medium hover:opacity-90"
-          >
-            Logg inn
-          </Link>
-
-          <Link
-            href="/sign-in"
-            className="px-6 py-3 rounded-lg border border-slate-300 font-medium hover:bg-slate-100"
-          >
-            Se demo
-          </Link>
-        </div>
-      </div>
-    </main>
+    <div style={{ padding: 40 }}>
+      <h1>Reports fungerer 🎉</h1>
+      <p>Du er logget inn.</p>
+    </div>
   );
 }
